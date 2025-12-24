@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'intro_screen.dart';
 import 'game_model.dart';
-import 'game_screen.dart';
+import 'services/dictionary_service.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  // Initialize dictionary service
+  await DictionaryService().loadDictionary();
   runApp(const MyApp());
 }
 
@@ -21,7 +25,7 @@ class MyApp extends StatelessWidget {
           useMaterial3: true,
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
         ),
-        home: const GameScreen(),
+        home: const IntroScreen(),
       ),
     );
   }

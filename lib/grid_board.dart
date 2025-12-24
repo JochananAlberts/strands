@@ -52,11 +52,15 @@ class _GridBoardState extends State<GridBoard> {
                     // Let's check model for spangram indices logic later. 
                     // For now, default blue.
                     
+                    // Hint logic
+                    bool isHinted = game.hintedIndices != null && game.hintedIndices!.contains(index);
+                    
                     return LetterCell(
                       char: game.grid[index],
                       isSelected: isSelected,
                       isFound: isFound,
                       isSpangram: game.foundWords.contains(game.spangram) && (game.solutions[game.spangram]?.contains(index) ?? false),
+                      isHinted: isHinted,
                     );
                   },
                 ),
@@ -79,7 +83,8 @@ class _GridBoardState extends State<GridBoard> {
                 Positioned.fill(
                   child: CustomPaint(
                     painter: _FoundWordsPainter(
-                      foundWordsIndices: game.foundWords.map((w) => game.solutions[w]!).toList(), // This is getting complex, maybe simplify
+                      foundWordsIndices: game.foundWords.map((w) => game.solutions[w]!).toList(),
+                      spangramIndices: game.solutions[game.spangram] ?? [],
                       columnCount: game.columns,
                     ),
                   ),
@@ -221,26 +226,36 @@ class _SelectionPainter extends CustomPainter {
 
 class _FoundWordsPainter extends CustomPainter {
    final List<List<int>> foundWordsIndices;
+   final List<int> spangramIndices;
    final int columnCount;
    
-   _FoundWordsPainter({required this.foundWordsIndices, required this.columnCount});
-   
-   @override
-  void paint(Canvas canvas, Size size) {
-     final paint = Paint()
-      ..color = Colors.blue.withOpacity(0.2)
-      ..strokeWidth = 24
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round
-      ..style = PaintingStyle.stroke;
+   _FoundWordsPainter({
+     required this.foundWordsIndices, 
+     required this.spangramIndices, 
+     required this.columnCount
+   });
 
-    // Geometry sync
-    double innerWidth = size.width; // size already excludes padding
+   @override
+   void paint(Canvas canvas, Size size) {
+    if (foundWordsIndices.isEmpty) return;
+
+    double innerWidth = size.width; 
     double gap = 8.0;
     double cellWidth = (innerWidth - (gap * (columnCount - 1))) / columnCount;
     double cellHeight = cellWidth;
-      
+
     for (var indices in foundWordsIndices) {
+      if (indices.isEmpty) continue;
+      
+      bool isSpangram = _areListsEqual(indices, spangramIndices);
+
+      final paint = Paint()
+        ..color = isSpangram ? Colors.amber[300]! : Colors.blue[100]!
+        ..strokeWidth = 24
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round
+        ..style = PaintingStyle.stroke;
+
       Path path = Path();
       for (int i = 0; i < indices.length; i++) {
         int index = indices[i];
@@ -250,13 +265,24 @@ class _FoundWordsPainter extends CustomPainter {
         double cx = (c * (cellWidth + gap)) + cellWidth / 2;
         double cy = (r * (cellHeight + gap)) + cellHeight / 2;
         
-        if (i == 0) path.moveTo(cx, cy);
-        else path.lineTo(cx, cy);
+        if (i == 0) {
+          path.moveTo(cx, cy);
+        } else {
+          path.lineTo(cx, cy);
+        }
       }
       canvas.drawPath(path, paint);
     }
-  }
-  
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
+   }
+   
+   bool _areListsEqual(List<int> list1, List<int> list2) {
+      if (list1.length != list2.length) return false;
+      for (int i = 0; i < list1.length; i++) {
+        if (list1[i] != list2[i]) return false;
+      }
+      return true;
+   }
+
+   @override
+   bool shouldRepaint(covariant CustomPainter oldDelegate) => true;
 }

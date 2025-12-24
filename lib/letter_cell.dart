@@ -6,6 +6,7 @@ class LetterCell extends StatelessWidget {
   final bool isSelected;
   final bool isFound;
   final bool isSpangram;
+  final bool isHinted;
 
   const LetterCell({
     super.key,
@@ -13,6 +14,7 @@ class LetterCell extends StatelessWidget {
     required this.isSelected,
     required this.isFound,
     this.isSpangram = false,
+    this.isHinted = false,
   });
 
   @override
@@ -25,19 +27,39 @@ class LetterCell extends StatelessWidget {
       textColor = isSpangram ? Colors.amber[800]! : Colors.blue[600]!;
       fontWeight = FontWeight.bold;
     } else if (isSelected) {
-      textColor = Colors.black; // Selected usually just has a line over it, text remains black or becomes bold
+      textColor = Colors.black;
       fontWeight = FontWeight.bold;
+    }
+    
+    // Hint visual wrapper
+    Widget content = Text(
+      char,
+      style: GoogleFonts.kanit(
+        fontSize: 32,
+        fontWeight: fontWeight,
+        color: textColor,
+      ),
+    );
+    
+    if (isHinted && !isFound) {
+      return Container(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.yellowAccent.withOpacity(0.8), width: 2),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.yellowAccent.withOpacity(0.5),
+              blurRadius: 10,
+              spreadRadius: 2,
+            ),
+          ],
+        ),
+        child: Center(child: content),
+      );
     }
 
     return Center(
-      child: Text(
-        char,
-        style: GoogleFonts.kanit( // Using Kanit or similar blocky font
-          fontSize: 32,
-          fontWeight: fontWeight,
-          color: textColor,
-        ),
-      ),
+      child: content,
     );
   }
 }

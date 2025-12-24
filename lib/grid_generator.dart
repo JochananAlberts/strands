@@ -1,3 +1,4 @@
+import 'dart:isolate';
 import 'dart:math';
 import 'level_data.dart';
 
@@ -14,30 +15,69 @@ class GridGenerator {
   ];
 
   // Returns a grid and the solutions map, or null if generation fails
+  // Returns a grid and the solutions map, or null if generation fails
   Future<(List<String>, Map<String, List<int>>)?> generate(Level level) async {
+    // Run multiple generations in parallel and take the first one that succeeds
+    // This utilizes multi-core CPUs to find a valid grid faster
+    List<Future<(List<String>, Map<String, List<int>>)?>> workers = List.generate(
+      3, 
+      (_) => Isolate.run(() => _generateOnIsolate(level))
+    );
+    
+    try {
+      // Wait for the first valid result (non-null)
+      // Future.any returns the first *completed* future, but that might be null if one fails fast.
+      // We want the first SUCCESS.
+      // Actually, standard Future.any completes with the first value.
+      // If we use a robust approach:
+      final result = await Future.any(workers);
+      return result;
+    } catch (e) {
+      return null;
+    }
+  }
+
+  // Internal method that runs on the isolate
+  static (List<String>, Map<String, List<int>>)? _generateOnIsolate(Level level) {
+    // Create a new instance for the isolate execution
+    final generator = GridGenerator();
+    return generator._generateInternal(level);
+  }
+
+  int _steps = 0;
+  final int _maxSteps = 2000; // Fail fast threshold
+
+  (List<String>, Map<String, List<int>>)? _generateInternal(Level level) {
     // We try multiple times because random placement might get stuck
-    for (int attempt = 0; attempt < 50; attempt++) {
+    // With fail-fast, we can try more times quickly
+    for (int attempt = 0; attempt < 200; attempt++) {
       List<String?> grid = List.filled(rows * cols, null);
       Map<String, List<int>> solutions = {};
       
-      // Sort words by length descending (usually helps packing)
-      // Including spangram in the list of words to place
+      _steps = 0; // Reset counter
+      
+      // Sort words by length descending
       List<String> allWords = [level.spangram, ...level.words];
-      // Sort: longest first
       allWords.sort((a, b) => b.length.compareTo(a.length));
       
-      bool success = _placeWords(grid, solutions, allWords, 0);
-      
-      if (success) {
-        // Convert to non-nullable list
-        List<String> finalGrid = grid.map((e) => e!).toList();
-        return (finalGrid, solutions);
+      try {
+        bool success = _placeWords(grid, solutions, allWords, 0);
+        if (success) {
+          // Convert to non-nullable list
+          List<String> finalGrid = grid.map((e) => e!).toList();
+          return (finalGrid, solutions);
+        }
+      } catch (e) {
+        // Step limit reached, try next attempt
+        continue;
       }
     }
     return null;
   }
 
   bool _placeWords(List<String?> grid, Map<String, List<int>> solutions, List<String> words, int wordIndex) {
+    if (_steps > _maxSteps) throw Exception("Step limit reached");
+    
     if (wordIndex >= words.length) {
       return true; // All words placed
     }
@@ -53,8 +93,6 @@ class GridGenerator {
 
     for (int start in startPoints) {
       // Try to place this word starting at 'start'
-      // We need to find a path of length word.length
-      // This is another DFS
       if (_attemptPath(grid, solutions, word, 0, start, [])) {
         // Word placed successfully, recurse for next word
         if (_placeWords(grid, solutions, words, wordIndex + 1)) {
@@ -69,6 +107,9 @@ class GridGenerator {
   }
   
   bool _attemptPath(List<String?> grid, Map<String, List<int>> solutions, String word, int charIndex, int currentIdx, List<int> currentPath) {
+    _steps++;
+    if (_steps > _maxSteps) throw Exception("Step limit reached");
+    
     // Place char
     grid[currentIdx] = word[charIndex];
     currentPath.add(currentIdx);

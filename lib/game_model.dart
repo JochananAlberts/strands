@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'level_data.dart';
 import 'grid_generator.dart';
+import 'services/dictionary_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class GameModel extends ChangeNotifier {
   // 6 columns x 8 rows = 48 letters
@@ -18,18 +20,70 @@ class GameModel extends ChangeNotifier {
   List<String> foundWords = [];
   bool isGameWon = false;
   
-  // Hint system
-  int hintsAvailable = 0; // Starts at 0, gain 1 for every 3 non-theme words (omitted for MVP, or simplified)
+
   
   int currentLevelIndex = 0;
   bool isLoading = true;
 
   GameModel() {
-    _initFirstLevel();
+    _loadProgress();
   }
 
-  Future<void> _initFirstLevel() async {
-    await loadLevel(0);
+  Future<void> _loadProgress() async {
+    final prefs = await SharedPreferences.getInstance();
+    int savedLevel = prefs.getInt('currentLevelIndex') ?? 0;
+    
+    // Load the level locally first
+    await loadLevel(savedLevel);
+    
+    // Restore state if valid
+    List<String>? savedFoundWords = prefs.getStringList('foundWords_level_$savedLevel');
+    List<String>? savedBonusWords = prefs.getStringList('bonusWords_level_$savedLevel');
+    
+    if (savedFoundWords != null) {
+      for (String word in savedFoundWords) {
+        if (solutions.containsKey(word)) {
+          foundWords.add(word);
+          foundIndices.addAll(solutions[word]!);
+        }
+      }
+    }
+    
+    if (savedBonusWords != null) {
+      foundBonusWords.addAll(savedBonusWords);
+    }
+    
+    // Restore hint usage
+    hintsUsed = prefs.getInt('hintsUsed_level_$savedLevel') ?? 0;
+    bonusWordsUsedForHints = prefs.getInt('bonusWordsUsed_level_$savedLevel') ?? 0;
+    
+    // Check win condition after restore
+    if (foundWords.length == solutions.length) {
+      isGameWon = true;
+    }
+    
+    notifyListeners();
+  }
+
+  Future<void> _saveProgress() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('currentLevelIndex', currentLevelIndex);
+    await prefs.setStringList('foundWords_level_$currentLevelIndex', foundWords);
+    await prefs.setStringList('bonusWords_level_$currentLevelIndex', foundBonusWords.toList());
+    await prefs.setInt('hintsUsed_level_$currentLevelIndex', hintsUsed);
+    await prefs.setInt('bonusWordsUsed_level_$currentLevelIndex', bonusWordsUsedForHints);
+  }
+  
+  Future<void> resetLevel() async {
+    final prefs = await SharedPreferences.getInstance();
+    // Clear save for this level
+    await prefs.remove('foundWords_level_$currentLevelIndex');
+    await prefs.remove('bonusWords_level_$currentLevelIndex');
+    await prefs.remove('hintsUsed_level_$currentLevelIndex');
+    await prefs.remove('bonusWordsUsed_level_$currentLevelIndex');
+    
+    // Reload
+    loadLevel(currentLevelIndex);
   }
 
   Future<void> loadLevel(int index) async {
@@ -44,7 +98,13 @@ class GameModel extends ChangeNotifier {
     spangram = level.spangram;
     foundWords.clear();
     foundIndices.clear();
+    foundWords.clear();
+    foundWords.clear();
+    foundIndices.clear();
     selectedIndices.clear();
+    foundBonusWords.clear();
+    hintsUsed = 0;
+    bonusWordsUsedForHints = 0;
     isGameWon = false;
     
     // Generate Grid
@@ -63,6 +123,8 @@ class GameModel extends ChangeNotifier {
     }
     
     isLoading = false;
+    // Note: We don't save here immediately to avoid overwriting legitimate progress if called during restore
+    // _saveProgress() is called on state changes
     notifyListeners();
   }
   
@@ -106,22 +168,88 @@ class GameModel extends ChangeNotifier {
     }
   }
 
-  void endDrag() {
+  // Hint state
+  String? hintedWord;
+  List<int>? hintedIndices; // Store indices for rendering glow
+  
+  Set<String> foundBonusWords = {}; // Already found non-theme words
+  int hintsUsed = 0; // Usage count
+  int bonusWordsUsedForHints = 0; // How many words have been "spent"
+
+  int get wordsRequiredForHint {
+    if (hintsUsed == 0) return 3;
+    if (hintsUsed == 1) return 4;
+    return 5;
+  }
+  
+  int get currentProgress => foundBonusWords.length - bonusWordsUsedForHints;
+
+  double get hintProgress => (currentProgress / wordsRequiredForHint).clamp(0.0, 1.0);
+  bool get isHintActive => currentProgress >= wordsRequiredForHint;
+  bool get canUseHint => isHintActive && hintedWord == null;
+
+  void solveAll() {
+    for (String word in solutions.keys) {
+      if (!foundWords.contains(word)) {
+        foundWords.add(word);
+        foundIndices.addAll(solutions[word]!);
+      }
+    }
+    // Handle spangram logic if needed (usually ensuring it's in foundWords is enough)
+    
+    isGameWon = true;
+    hintedWord = null;
+    hintedIndices = null;
+    
+    _saveProgress();
+    notifyListeners();
+  }
+
+  void consumeHint() {
+    if (!canUseHint) return;
+    
+    // Find a word that hasn't been found yet
+    String? target;
+    for (String word in solutions.keys) {
+      if (!foundWords.contains(word)) {
+        target = word;
+        break;
+      }
+    }
+    
+    if (target != null) {
+      hintedWord = target;
+      hintedIndices = solutions[target];
+      
+      // Deduct cost
+      bonusWordsUsedForHints += wordsRequiredForHint;
+      hintsUsed++;
+      
+      _saveProgress(); // Save
+      notifyListeners();
+      debugPrint("Hint activated for: $target");
+    }
+  }
+
+  Future<void> endDrag() async {
     // Check word
     String formedWord = selectedIndices.map((i) => grid[i]).join();
     
     // Check if it's a solution
     if (solutions.containsKey(formedWord)) {
-      // Validate indices match (handle duplicate words if any, though strands usu unique usage)
-      // For now assume unique usage in grid for simplicity or strict checking against solution value
+      // Validate indices match
        List<int> expectedIndices = solutions[formedWord]!;
        
-       // Set comparison (order doesn't strict matter for 'found', but path matters for forming)
-       // Strands allows path winding.
-       // If the set of indices matches, it's good.
-       if (_areSetsEqual(selectedIndices, expectedIndices.toSet())) {
+       // Strict comparison
+       if (_areListsEqual(selectedIndices.toList(), expectedIndices)) {
          foundWords.add(formedWord);
          foundIndices.addAll(selectedIndices);
+         
+         // Clear hint if found
+         if (formedWord == hintedWord) {
+           hintedWord = null;
+           hintedIndices = null;
+         }
          
          if (formedWord == spangram) {
            // Special spangram effect
@@ -131,16 +259,37 @@ class GameModel extends ChangeNotifier {
          if (foundWords.length == solutions.length) {
            isGameWon = true;
          }
+         _saveProgress(); // Save
        }
+    } else {
+      // Check compatible words in dictionary
+      final isValid = await DictionaryService().isWordValid(formedWord);
+      
+      if (isValid && formedWord.length >= 4) {
+        // Only count if unique
+        if (!foundBonusWords.contains(formedWord)) {
+           debugPrint("Valid UNIQUE bonus word found: $formedWord.");
+           foundBonusWords.add(formedWord);
+           _saveProgress(); // Save
+           // Progress is automatic via getter
+        } else {
+           debugPrint("Word already found: $formedWord");
+        }
+      } else {
+        if (!isValid) debugPrint("Invalid word: $formedWord");
+      }
     }
     
     selectedIndices.clear();
     notifyListeners();
   }
   
-  bool _areSetsEqual(Set<int> a, Set<int> b) {
+  bool _areListsEqual(List<int> a, List<int> b) {
     if (a.length != b.length) return false;
-    return a.containsAll(b);
+    for (int i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
   }
 
   bool _isNeighbor(int i1, int i2) {
