@@ -13,7 +13,7 @@ class GameScreen extends StatelessWidget {
       backgroundColor: Colors.white,
       appBar: AppBar(
         title: Text(
-          "Strands Clone",
+          "Lisa's Game",
           style: GoogleFonts.kanit(fontWeight: FontWeight.bold, color: Colors.black),
         ),
         backgroundColor: Colors.white,
@@ -63,7 +63,7 @@ class GameScreen extends StatelessWidget {
                 ),
               ),
               
-              const Expanded(
+              Expanded(
                 child: Center(
                   child: game.isLoading 
                     ? const Center(child: CircularProgressIndicator()) 

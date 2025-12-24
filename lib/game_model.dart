@@ -80,23 +80,25 @@ class GameModel extends ChangeNotifier {
 
   void updateDrag(int index) {
     if (foundIndices.contains(index)) return;
+    // Backtracking logic
     if (selectedIndices.contains(index)) {
-      // Backtracking? Allowed in strands?
-      // Strands: you can backtrack to unselect, or just move to valid neighbor.
-      // If we move to the *penultimate* selected item, we unselect the last one.
+      // If we are dragging back over the previous letter, remove the last one
       if (selectedIndices.length > 1) {
         final last = selectedIndices.last;
         final secondLast = selectedIndices.elementAt(selectedIndices.length - 2);
+        
         if (index == secondLast) {
           selectedIndices.remove(last);
           notifyListeners();
           return;
         }
       }
+      // If dragging over an arbitrary already-selected node, maybe ignore or truncate. 
+      // Standard Strands behavior is usually to just do nothing unless it's immediate backtrack.
       return; 
     }
     
-    // Check neighbor
+    // Check neighbor match
     int lastIndex = selectedIndices.last;
     if (_isNeighbor(lastIndex, index)) {
       selectedIndices.add(index);

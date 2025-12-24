@@ -33,7 +33,7 @@ class LetterCell extends StatelessWidget {
       child: Text(
         char,
         style: GoogleFonts.kanit( // Using Kanit or similar blocky font
-          fontSize: 24,
+          fontSize: 32,
           fontWeight: fontWeight,
           color: textColor,
         ),

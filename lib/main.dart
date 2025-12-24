@@ -15,7 +15,7 @@ class MyApp extends StatelessWidget {
     return ChangeNotifierProvider(
       create: (_) => GameModel(),
       child: MaterialApp(
-        title: 'Strands Clone',
+        title: "Lisa's Game",
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           useMaterial3: true,

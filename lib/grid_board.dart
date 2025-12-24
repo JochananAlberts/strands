@@ -27,16 +27,20 @@ class _GridBoardState extends State<GridBoard> {
             child: Stack(
               children: [
                 // The Grid of letters
-                GridView.builder(
-                  physics: const NeverScrollableScrollPhysics(), // Disable scrolling
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: game.columns,
-                    mainAxisSpacing: 8,
-                    crossAxisSpacing: 8,
-                    childAspectRatio: 1.0,
-                  ),
-                  itemCount: game.grid.length,
-                  itemBuilder: (context, index) {
+                MediaQuery.removePadding(
+                  context: context,
+                  removeTop: true,
+                  child: GridView.builder(
+                    padding: EdgeInsets.zero,
+                    physics: const NeverScrollableScrollPhysics(), // Disable scrolling
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: game.columns,
+                      mainAxisSpacing: 8,
+                      crossAxisSpacing: 8,
+                      childAspectRatio: 1.0,
+                    ),
+                    itemCount: game.grid.length,
+                    itemBuilder: (context, index) {
                     bool isSelected = game.selectedIndices.contains(index);
                     bool isFound = game.foundIndices.contains(index);
                     // Determine if it's the spangram by checking if the found word it belongs to is spangram
@@ -56,6 +60,7 @@ class _GridBoardState extends State<GridBoard> {
                     );
                   },
                 ),
+              ),
                 // The selection line
                 if (game.selectedIndices.isNotEmpty)
                   Positioned.fill(
@@ -90,54 +95,65 @@ class _GridBoardState extends State<GridBoard> {
   void _handleInput(BuildContext context, Offset localPosition) {
     final game = Provider.of<GameModel>(context, listen: false);
     
-    // We need to map localPosition to an index.
-    // This requires knowing the size of the gri and cells.
-    // Since GridView is flexible, this is tricky without LayoutBuilder or RenderBox.
-    
-    // For MVVM simplicity:
-    // We can assume equal sizing.
     final RenderBox? box = _gridKey.currentContext?.findRenderObject() as RenderBox?;
     if (box == null) return;
     
-    // Size of the container
     final size = box.size;
-    
-    // With padding 16.
     double width = size.width;
-    double height = size.height;
+    // Padding is 16 all around.
+    // Inner width = width - 32
+    double innerWidth = width - 32;
     
-    // Helper to find index from offset
-    // 6 cols, 8 rows. Spacing 8.
-    // Cell width approx = (width - (5 * 8)) / 6
+    // 6 columns. 5 gaps of 8.0.
+    // cellWidth * 6 + 8 * 5 = innerWidth
+    // cellWidth = (innerWidth - 40) / 6
+    double gap = 8.0;
+    double cellWidth = (innerWidth - (gap * (game.columns - 1))) / game.columns;
     
-    // Correct approach: HitTest?
-    // Or just simple math if we know the geometry.
-    // Let's do simple math assuming the touch is within bounds.
+    // GridView default aspect ratio is 1.0, so cellHeight = cellWidth
+    double cellHeight = cellWidth;
     
-    // Subtract padding if strictly inside container with padding (16)
-    // But localPosition is relative to the Container which has padding? 
-    // Wait, the Container has padding 16, so the GridView is inside that.
-    // But the gesture detector is on the Container.
-    
+    // Adjust localPosition to be relative to the grid content (remove padding)
     double x = localPosition.dx - 16;
     double y = localPosition.dy - 16;
     
-    if (x < 0 || y < 0 || x > width - 16 || y > height - 16) return;
+    // Check bounds
+    double totalHeight = (cellHeight * game.rows) + (gap * (game.rows - 1));
+    // Remove strict bounds check to allow dragging slightly outside
+    // if (x < 0 || x > innerWidth || y < 0 || y > totalHeight) return;
     
-    // Approximate cell size
-    // We can get the cell dimensions from the width
-    double cellWidth = (width - 32) / game.columns; // 32 is total horizontal padding
-    double cellHeight = (height - 32) / game.rows; // not exact if aspect ratio 1.0 enforced, GridView might have bottom gap.
+    // Hit test with radius
+    // We iterate or find closest?
+    // Finding closest is efficient.
     
-    // Actually GridView default aspect ratio is 1.0.
-    // So cellHeight == cellWidth.
-    // We should use that.
+    int col = ((x - cellWidth / 2) / (cellWidth + gap)).round();
+    int row = ((y - cellHeight / 2) / (cellHeight + gap)).round();
     
-    int col = (x / cellWidth).floor();
-    int row = (y / cellWidth).floor(); // assuming square cells
+    // Clamp
+    if (col < 0) col = 0;
+    if (col >= game.columns) col = game.columns - 1;
+    if (row < 0) row = 0;
+    if (row >= game.rows) row = game.rows - 1;
     
-    if (col >= 0 && col < game.columns && row >= 0 && row < game.rows) {
-      int index = row * game.columns + col;
+    // Calculate center of this candidate cell
+    double cx = (col * (cellWidth + gap)) + cellWidth / 2;
+    double cy = (row * (cellHeight + gap)) + cellHeight / 2;
+    
+    // Check distance
+    double dx = x - cx;
+    double dy = y - cy;
+    double distSq = dx*dx + dy*dy;
+    
+    // Threshold: sensitivity. 
+    // Cell width is roughly 50-60px.
+    // If we want a gap between cells to avoid "elbows" in diagonals:
+    // Radius should be less than (cellHeight/2) but large enough to be easy to hit.
+    // Let's use 45% of cellWidth.
+    // (0.45 * cellWidth)^2
+    double radius = cellWidth * 0.40; // 40% leaves substantial gaps for diagonals
+    if (distSq < radius * radius) {
+      // We are in the hot zone
+       int index = row * game.columns + col;
       if (index >= 0 && index < game.grid.length) {
         if (game.selectedIndices.isEmpty) {
           game.startDrag(index);
@@ -147,7 +163,10 @@ class _GridBoardState extends State<GridBoard> {
       }
     }
   }
-}
+} // End of State class
+
+// ... (SelectionPainter, FoundWordsPainter remain)
+
 
 class _SelectionPainter extends CustomPainter {
   final List<int> selectedIndices;
@@ -162,37 +181,29 @@ class _SelectionPainter extends CustomPainter {
 
     final paint = Paint()
       ..color = Colors.grey.withOpacity(0.5)
-      ..strokeWidth = 12
+      ..strokeWidth = 24  // Thicker line
       ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
       ..style = PaintingStyle.stroke;
 
     Path path = Path();
     
-    // We need to calculate center points of cells again.
-    // Duplicated math from _handleInput - ideally shared.
-    double cellWidth = (size.width - 32) / columnCount; // 32 for padding
-    // Offset by padding (16)
-    double offsetX = 16 + cellWidth / 2;
-    double offsetY = 16 + cellWidth / 2;
+    // Geometry sync:
+    // This painter is inside the Stack, which is inside the padding.
+    // So 'size' IS the inner size.
+    double innerWidth = size.width; 
+    double gap = 8.0;
+    double cellWidth = (innerWidth - (gap * (columnCount - 1))) / columnCount;
+    double cellHeight = cellWidth;
 
     for (int i = 0; i < selectedIndices.length; i++) {
       int index = selectedIndices[i];
       int r = index ~/ columnCount;
       int c = index % columnCount;
-
-      double x = (c * cellWidth) + offsetX; // This assumes spacing is handled inside cellWidth calculation conceptually or we need to account for gap?
-      // GridView spacing is 8.
-      // So (cellWidth * c) isn't enough.
-      // Total width = (cellW * 6) + (space * 5)
-      // cellW = (AvailableWidth - (space * 5)) / 6
       
-      // Let's refine geometry.
-      // 5 spaces of 8.0 = 40.0
-      double availableWidth = size.width - 32;
-      double actualCellWidth = (availableWidth - (8 * (columnCount - 1))) / columnCount;
-      
-      double cx = 16 + (c * (actualCellWidth + 8)) + actualCellWidth / 2;
-      double cy = 16 + (r * (actualCellWidth + 8)) + actualCellWidth / 2; // Assuming square
+      // Calculate center of cell relative to (0,0) of this painter
+      double cx = (c * (cellWidth + gap)) + cellWidth / 2;
+      double cy = (r * (cellHeight + gap)) + cellHeight / 2;
       
       if (i == 0) {
         path.moveTo(cx, cy);
@@ -216,17 +227,18 @@ class _FoundWordsPainter extends CustomPainter {
    
    @override
   void paint(Canvas canvas, Size size) {
-    // Similar logic but for found words, maybe different colors
-    // For now simple blue lines
      final paint = Paint()
-      ..color = Colors.blue.withOpacity(0.3)
-      ..strokeWidth = 12
+      ..color = Colors.blue.withOpacity(0.2)
+      ..strokeWidth = 24
       ..strokeCap = StrokeCap.round
+      ..strokeJoin = StrokeJoin.round
       ..style = PaintingStyle.stroke;
-      
-    // Geometry
-    double availableWidth = size.width - 32;
-    double actualCellWidth = (availableWidth - (8 * (columnCount - 1))) / columnCount;
+
+    // Geometry sync
+    double innerWidth = size.width; // size already excludes padding
+    double gap = 8.0;
+    double cellWidth = (innerWidth - (gap * (columnCount - 1))) / columnCount;
+    double cellHeight = cellWidth;
       
     for (var indices in foundWordsIndices) {
       Path path = Path();
@@ -235,8 +247,8 @@ class _FoundWordsPainter extends CustomPainter {
         int r = index ~/ columnCount;
         int c = index % columnCount;
         
-        double cx = 16 + (c * (actualCellWidth + 8)) + actualCellWidth / 2;
-        double cy = 16 + (r * (actualCellWidth + 8)) + actualCellWidth / 2;
+        double cx = (c * (cellWidth + gap)) + cellWidth / 2;
+        double cy = (r * (cellHeight + gap)) + cellHeight / 2;
         
         if (i == 0) path.moveTo(cx, cy);
         else path.lineTo(cx, cy);
