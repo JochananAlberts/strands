@@ -19,7 +19,7 @@ class MyApp extends StatelessWidget {
     return ChangeNotifierProvider(
       create: (_) => GameModel(),
       child: MaterialApp(
-        title: "Lisa's Game",
+        title: "Lisa's Games",
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           useMaterial3: true,

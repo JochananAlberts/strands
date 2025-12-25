@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'game_screen.dart';
+import 'dart:ui'; // For PathMetrics
+import 'main_menu_screen.dart';
 
 class IntroScreen extends StatefulWidget {
   const IntroScreen({super.key});
@@ -56,7 +58,7 @@ class _IntroScreenState extends State<IntroScreen> with TickerProviderStateMixin
     if (mounted) {
       Navigator.of(context).pushReplacement(
         PageRouteBuilder(
-          pageBuilder: (_, __, ___) => const GameScreen(),
+          pageBuilder: (_, __, ___) => const MainMenuScreen(),
           transitionsBuilder: (_, animation, __, child) {
             return FadeTransition(opacity: animation, child: child);
           },
@@ -136,12 +138,18 @@ class _IntroScreenState extends State<IntroScreen> with TickerProviderStateMixin
             child: Transform.scale(
               scale: scale.value,
               child: Container(
-                width: 60,
-                height: 60,
-                decoration: const BoxDecoration(
-                  // No box decoration to look cleaner, just text? 
-                  // Or simulated cell looks nice.
-                  // Let's match the game style roughly but cleaner for intro.
+                width: 70, // Slightly larger
+                height: 70,
+                decoration: BoxDecoration(
+                  color: Colors.blueAccent, // Icon style typically vibrant
+                  borderRadius: BorderRadius.circular(20), // Rounded
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.2),
+                      blurRadius: 8,
+                      offset: const Offset(2, 4),
+                    )
+                  ],
                 ),
                 alignment: Alignment.center,
                 child: Text(
@@ -149,7 +157,7 @@ class _IntroScreenState extends State<IntroScreen> with TickerProviderStateMixin
                   style: GoogleFonts.kanit(
                     fontSize: 40, 
                     fontWeight: FontWeight.w900,
-                    color: Colors.black,
+                    color: Colors.white,
                   ),
                 ),
               ),
@@ -193,48 +201,75 @@ class _IntroLinePainter extends CustomPainter {
     // 2. I->S (Diagonal)
     // 3. S->A (Horizontal)
     
-    Path path = Path();
-    path.moveTo(p1.dx, p1.dy);
+    // We need a path that visits p1 -> p2 -> p3 -> p4 but rounds the corners at p2 and p3.
+    // However, for proper animation progress, we need to calculate the full rounded path first, 
+    // then extract the sub-path based on progress.
     
-    // Total path length roughly
-    double d1 = (p2 - p1).distance;
-    double d2 = (p3 - p2).distance;
-    double d3 = (p4 - p3).distance;
-    double totalDist = d1 + d2 + d3;
+    Path fullPath = Path();
+    fullPath.moveTo(p1.dx, p1.dy);
     
-    double currentDist = totalDist * progress;
+    // Corner radius
+    double radius = 30.0;
     
-    // Draw segment 1
-    if (currentDist <= d1) {
-      // Interpolate p1 to p2
-      double t = currentDist / d1;
-      Offset target = Offset.lerp(p1, p2, t)!;
-      path.lineTo(target.dx, target.dy);
-    } else {
-      path.lineTo(p2.dx, p2.dy);
-      double distAfter1 = currentDist - d1;
-      
-      // Draw segment 2
-      if (distAfter1 <= d2) {
-        double t = distAfter1 / d2;
-        Offset target = Offset.lerp(p2, p3, t)!;
-        path.lineTo(target.dx, target.dy);
-      } else {
-        path.lineTo(p3.dx, p3.dy);
-        double distAfter2 = distAfter1 - d2;
-        
-        // Draw segment 3
-        if (distAfter2 <= d3) {
-           double t = distAfter2 / d3;
-           Offset target = Offset.lerp(p3, p4, t)!;
-           path.lineTo(target.dx, target.dy);
-        } else {
-           path.lineTo(p4.dx, p4.dy);
-        }
-      }
+    // Segment 1: L -> I (p1 -> p2)
+    // We stop 'radius' short of p2
+    // But we need to be careful if segments are too short. spacing=100, box=200. Distance is plenty.
+    
+    // Direction p1->p2 is (1, 0)
+    // Direction p2->p3 is diagonal
+    // Direction p3->p4 is (1, 0)
+    
+    // To round corner at p2:
+    // Go from p1 to (p2 - radius towards p1)
+    // curve to (p2 + radius towards p3) using p2 as control?
+    // p2 is sharp turn.
+    
+    // Simple approach:
+    // 1. Line to slightly before p2.
+    // 2. Quadratic to slightly after p2 (on line to p3).
+    
+    // Vector math helpers would be nice, but let's do simple approximations for this fixed layout.
+    // p1 = (30,30), p2 = (170, 30)
+    // p3 = (30, 170), p4 = (170, 170)
+    
+    // Corner 1 (at p2): Incoming Horizontal, Outgoing Diagonal (Back-Left-Downish)
+    // Wait, p1->p2 is Right. p2->p3 is Left-Down diagonal.
+    
+    // Calculate intermediate points for Rounding
+    // P2_in: on line p1-p2, radius away from p2.
+    // P2_out: on line p2-p3, radius away from p2.
+    
+    Offset dir12 = (p2 - p1) / (p2 - p1).distance;
+    Offset dir23 = (p3 - p2) / (p3 - p2).distance;
+    Offset dir34 = (p4 - p3) / (p4 - p3).distance;
+    
+    Offset p2_in = p2 - dir12 * radius;
+    Offset p2_out = p2 + dir23 * radius;
+    
+    Offset p3_in = p3 - dir23 * radius;
+    Offset p3_out = p3 + dir34 * radius;
+    
+    fullPath.lineTo(p2_in.dx, p2_in.dy);
+    fullPath.quadraticBezierTo(p2.dx, p2.dy, p2_out.dx, p2_out.dy);
+    
+    fullPath.lineTo(p3_in.dx, p3_in.dy);
+    fullPath.quadraticBezierTo(p3.dx, p3.dy, p3_out.dx, p3_out.dy);
+    
+    fullPath.lineTo(p4.dx, p4.dy);
+    
+    // Now trim path based on progress
+    // PathMetrics helps us exact length
+    
+    // Actually, CustomPainter has access to metrics.
+    // We can use extractPath.
+    
+    var metrics = fullPath.computeMetrics().toList();
+    if (metrics.isNotEmpty) {
+      var metric = metrics.first;
+      double len = metric.length;
+      Path drawPath = metric.extractPath(0, len * progress);
+      canvas.drawPath(drawPath, paint);
     }
-    
-    canvas.drawPath(path, paint);
   }
 
   @override

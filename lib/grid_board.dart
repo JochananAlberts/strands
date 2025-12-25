@@ -55,12 +55,21 @@ class _GridBoardState extends State<GridBoard> {
                     // Hint logic
                     bool isHinted = game.hintedIndices != null && game.hintedIndices!.contains(index);
                     
+                    // Animation logic
+                    int animationOrder = -1;
+                    if (game.lastFoundWordIndices.contains(index)) {
+                      animationOrder = game.lastFoundWordIndices.indexOf(index);
+                    }
+                    int animationTotalLength = game.lastFoundWordIndices.length;
+                    
                     return LetterCell(
                       char: game.grid[index],
                       isSelected: isSelected,
                       isFound: isFound,
                       isSpangram: game.foundWords.contains(game.spangram) && (game.solutions[game.spangram]?.contains(index) ?? false),
                       isHinted: isHinted,
+                      animationOrder: animationOrder,
+                      animationTotalLength: animationTotalLength,
                     );
                   },
                 ),
@@ -250,7 +259,7 @@ class _FoundWordsPainter extends CustomPainter {
       bool isSpangram = _areListsEqual(indices, spangramIndices);
 
       final paint = Paint()
-        ..color = isSpangram ? Colors.amber[300]! : Colors.blue[100]!
+        ..color = isSpangram ? Colors.amber[400]!.withOpacity(0.5) : Colors.blue[300]!.withOpacity(0.4)
         ..strokeWidth = 24
         ..strokeCap = StrokeCap.round
         ..strokeJoin = StrokeJoin.round

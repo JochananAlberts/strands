@@ -18,12 +18,14 @@ class GameModel extends ChangeNotifier {
   Set<int> selectedIndices = {};
   Set<int> foundIndices = {};
   List<String> foundWords = [];
+  List<int> lastFoundWordIndices = []; // For animation
   bool isGameWon = false;
-  
-
   
   int currentLevelIndex = 0;
   bool isLoading = true;
+
+  int accumulatedTimeSeconds = 0; // Total persisted time
+  int? _sessionStartTimeMillis; // Start of current active session (null if paused)
 
   GameModel() {
     _loadProgress();
@@ -40,6 +42,10 @@ class GameModel extends ChangeNotifier {
     List<String>? savedFoundWords = prefs.getStringList('foundWords_level_$savedLevel');
     List<String>? savedBonusWords = prefs.getStringList('bonusWords_level_$savedLevel');
     
+    // Restore timer
+    accumulatedTimeSeconds = prefs.getInt('accumulatedTime_level_$savedLevel') ?? 0;
+    // We do NOT automatically start the timer here. The UI (GameScreen) must trigger startTimer().
+
     if (savedFoundWords != null) {
       for (String word in savedFoundWords) {
         if (solutions.containsKey(word)) {
@@ -72,7 +78,114 @@ class GameModel extends ChangeNotifier {
     await prefs.setStringList('bonusWords_level_$currentLevelIndex', foundBonusWords.toList());
     await prefs.setInt('hintsUsed_level_$currentLevelIndex', hintsUsed);
     await prefs.setInt('bonusWordsUsed_level_$currentLevelIndex', bonusWordsUsedForHints);
+    // Save timer
+    // If running, we must checkpoint the current session into the accumulated time temporarily for saving?
+    // Or, we just save accumulatedTimeSeconds.
+    // If we crash, we lose the current session's seconds. That's acceptable.
+    // Better: if running, add current session to accumulated, save, then reset session start to now.
+    
+    int currentTotal = accumulatedTimeSeconds;
+    if (_sessionStartTimeMillis != null) {
+      currentTotal += (DateTime.now().millisecondsSinceEpoch - _sessionStartTimeMillis!) ~/ 1000;
+    }
+    await prefs.setInt('accumulatedTime_level_$currentLevelIndex', currentTotal);
   }
+  
+  // Leaderboard State
+  List<int> currentTopScores = [];
+  int? currentRunRank; // 1-based rank of the current run, or null
+
+  Future<List<int>> getTopScores(int levelIndex) async {
+    final prefs = await SharedPreferences.getInstance();
+    List<String>? scores = prefs.getStringList('leaderboard_level_$levelIndex');
+    if (scores == null) return [];
+    return scores.map((s) => int.tryParse(s) ?? 0).toList();
+  }
+  
+  Future<int?> getHighScore(int levelIndex) async {
+    List<int> scores = await getTopScores(levelIndex);
+    if (scores.isEmpty) return null;
+    return scores.first; // Best time is first because we sort ASC
+  }
+  
+  Future<void> _checkAndSaveHighScore() async {
+    if (!isGameWon) return;
+    
+    final prefs = await SharedPreferences.getInstance();
+    int currentRunTime = totalSecondsPlayed;
+    
+    // Load existing leaderboard
+    List<int> scores = await getTopScores(currentLevelIndex);
+    
+    // Add new score
+    scores.add(currentRunTime);
+    
+    // Sort (ASC because lower time is better)
+    scores.sort();
+    
+    // Keep top 5
+    if (scores.length > 5) {
+      scores = scores.sublist(0, 5);
+    }
+    
+    // Determine rank
+    // Note: If multiple identical times exists, this finds the first one. 
+    // Since we just added it and sorted, if it's unique it's there. 
+    // If it's duplicate, it shares the rank.
+    int rank = scores.indexOf(currentRunTime) + 1;
+    if (rank == 0) rank = -1; // Should not happen if we just added it, unless it was dropped ( > top 5)
+    
+    // If it was dropped (not in top 5), rank is > 5 or conceptually "unranked" in this context
+    if (!scores.contains(currentRunTime)) {
+       currentRunRank = null; 
+    } else {
+       currentRunRank = rank;
+    }
+    
+    currentTopScores = scores;
+    
+    await prefs.setStringList(
+        'leaderboard_level_$currentLevelIndex', 
+        scores.map((e) => e.toString()).toList()
+    );
+    
+    // Legacy support: also update 'highScore' for the menu checks if we want to keep using that
+    if (rank == 1) {
+       await prefs.setInt('highScore_level_$currentLevelIndex', currentRunTime);
+    }
+    
+    debugPrint("Leaderboard updated. Rank: $currentRunRank. Top: $scores");
+    notifyListeners();
+  }
+  
+  // Timer controls called by UI
+  void startTimer() {
+    if (isGameWon) return;
+    if (_sessionStartTimeMillis == null) {
+      _sessionStartTimeMillis = DateTime.now().millisecondsSinceEpoch;
+      notifyListeners(); // Optional
+    }
+  }
+  
+  void stopTimer() {
+    if (_sessionStartTimeMillis != null) {
+      int sessionDuration = DateTime.now().millisecondsSinceEpoch - _sessionStartTimeMillis!;
+      accumulatedTimeSeconds += sessionDuration ~/ 1000;
+      _sessionStartTimeMillis = null;
+      _saveProgress(); // Persist
+      notifyListeners();
+    }
+  }
+  
+  int get totalSecondsPlayed {
+    int total = accumulatedTimeSeconds;
+    if (_sessionStartTimeMillis != null) {
+      total += (DateTime.now().millisecondsSinceEpoch - _sessionStartTimeMillis!) ~/ 1000;
+    }
+    return total;
+  }
+
+  bool get isTimerRunning => _sessionStartTimeMillis != null;
   
   Future<void> resetLevel() async {
     final prefs = await SharedPreferences.getInstance();
@@ -81,6 +194,7 @@ class GameModel extends ChangeNotifier {
     await prefs.remove('bonusWords_level_$currentLevelIndex');
     await prefs.remove('hintsUsed_level_$currentLevelIndex');
     await prefs.remove('bonusWordsUsed_level_$currentLevelIndex');
+    await prefs.remove('accumulatedTime_level_$currentLevelIndex');
     
     // Reload
     loadLevel(currentLevelIndex);
@@ -98,14 +212,17 @@ class GameModel extends ChangeNotifier {
     spangram = level.spangram;
     foundWords.clear();
     foundIndices.clear();
-    foundWords.clear();
-    foundWords.clear();
+    // foundWords.clear(); // Removed duplicate
     foundIndices.clear();
     selectedIndices.clear();
     foundBonusWords.clear();
     hintsUsed = 0;
     bonusWordsUsedForHints = 0;
     isGameWon = false;
+    
+    // Reset timer for new level
+    accumulatedTimeSeconds = 0;
+    _sessionStartTimeMillis = null; // Do not start automatically until UI says so
     
     // Generate Grid
     final generator = GridGenerator();
@@ -125,11 +242,16 @@ class GameModel extends ChangeNotifier {
     isLoading = false;
     // Note: We don't save here immediately to avoid overwriting legitimate progress if called during restore
     // _saveProgress() is called on state changes
+    // BUT we should save the new start time if it's truly a new level load (not a restore).
+    // _loadProgress logic handles the restore case by overwriting this if a saved time exists.
+    // However, _loadProgress calls loadLevel first.
+    // So loadLevel sets it to NOW. Then _loadProgress overwrites it with SAVED. Correct.
     notifyListeners();
   }
   
-  void nextLevel() {
-    loadLevel(currentLevelIndex + 1);
+  Future<void> nextLevel() async {
+    await loadLevel(currentLevelIndex + 1);
+    await _saveProgress(); // Persist the move to the new level
   }
 
   // User Interaction
@@ -176,6 +298,16 @@ class GameModel extends ChangeNotifier {
   int hintsUsed = 0; // Usage count
   int bonusWordsUsedForHints = 0; // How many words have been "spent"
 
+  // Helper for UI
+  String get currentWordBeingFormed {
+    if (selectedIndices.isEmpty) return "";
+    String word = selectedIndices.map((i) => grid[i]).join();
+    if (word.length > 16) {
+      return word.substring(0, 16);
+    }
+    return word;
+  }
+
   int get wordsRequiredForHint {
     if (hintsUsed == 0) return 3;
     if (hintsUsed == 1) return 4;
@@ -205,15 +337,29 @@ class GameModel extends ChangeNotifier {
     notifyListeners();
   }
 
-  void consumeHint() {
-    if (!canUseHint) return;
+  void consumeHint({bool force = false}) {
+    // If forced (e.g. shake), we bypass the progress check.
+    // If not forced, we respect the rules.
+    if (!force && !canUseHint) return;
+    
+    // Don't override existing hint
+    if (hintedWord != null) return;
     
     // Find a word that hasn't been found yet
     String? target;
-    for (String word in solutions.keys) {
-      if (!foundWords.contains(word)) {
-        target = word;
-        break;
+    List<String> unfoundWords = solutions.keys.where((w) => !foundWords.contains(w)).toList();
+    
+    if (unfoundWords.isNotEmpty) {
+      // Prioritize theme words over Spangram
+      // Only show Spangram if it's the ONLY thing left (or if only spangrams are left, edge case)
+      List<String> themeWords = unfoundWords.where((w) => w != spangram).toList();
+      
+      if (themeWords.isNotEmpty) {
+        // Pick a theme word (first one available)
+        target = themeWords.first;
+      } else {
+        // Only spangram left
+        target = spangram;
       }
     }
     
@@ -221,13 +367,15 @@ class GameModel extends ChangeNotifier {
       hintedWord = target;
       hintedIndices = solutions[target];
       
-      // Deduct cost
-      bonusWordsUsedForHints += wordsRequiredForHint;
-      hintsUsed++;
+      // Deduct cost ONLY if it was a "paid" hint
+      if (!force) {
+        bonusWordsUsedForHints += wordsRequiredForHint;
+        hintsUsed++;
+      }
       
       _saveProgress(); // Save
       notifyListeners();
-      debugPrint("Hint activated for: $target");
+      debugPrint("Hint activated for: $target (Forced: $force)");
     }
   }
 
@@ -244,6 +392,7 @@ class GameModel extends ChangeNotifier {
        if (_areListsEqual(selectedIndices.toList(), expectedIndices)) {
          foundWords.add(formedWord);
          foundIndices.addAll(selectedIndices);
+         lastFoundWordIndices = List.from(selectedIndices); // Capture for animation
          
          // Clear hint if found
          if (formedWord == hintedWord) {
@@ -258,6 +407,7 @@ class GameModel extends ChangeNotifier {
          // Check win
          if (foundWords.length == solutions.length) {
            isGameWon = true;
+           _checkAndSaveHighScore();
          }
          _saveProgress(); // Save
        }
