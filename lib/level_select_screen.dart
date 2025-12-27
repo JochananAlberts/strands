@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import 'game_model.dart';
 import 'game_screen.dart';
 import 'level_data.dart';
+import 'app_theme.dart';
 
 class LevelSelectScreen extends StatelessWidget {
   const LevelSelectScreen({super.key});
@@ -11,21 +12,21 @@ class LevelSelectScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppTheme.background,
       appBar: AppBar(
         title: Text(
           "SELECT PUZZLE",
           style: GoogleFonts.kanit(
             fontSize: 28,
             fontWeight: FontWeight.bold,
-            color: Colors.black,
+            color: AppTheme.textMain,
           ),
         ),
         centerTitle: true,
-        backgroundColor: Colors.white,
+        backgroundColor: AppTheme.background,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.black),
+          icon: const Icon(Icons.arrow_back, color: AppTheme.textMain),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -49,32 +50,79 @@ class LevelSelectScreen extends StatelessWidget {
   }
 
   Widget _buildLevelButton(BuildContext context, int index, String theme) {
+    // Access score
+    final game = Provider.of<GameModel>(context);
+    int? bestTime = game.levelHighScores[index];
+    
+    // Default Style (Not started / No score)
+    Color bgColor = AppTheme.primaryLight.withOpacity(0.5);
+    Color borderColor = AppTheme.primaryBorder;
+    List<Widget> medals = [];
+    
+    if (bestTime != null) {
+      // Completed Style (Green box for everyone who finished)
+      bgColor = AppTheme.successBg.withOpacity(0.5);
+      borderColor = AppTheme.successBorder;
+      
+      // Cumulative Medal Logic
+      // If < 60s (1 min), you get Gold, Silver, AND Bronze
+      if (bestTime < 60) {
+        medals.add(const Icon(Icons.workspace_premium, color: AppTheme.medalGold, size: 24)); // Gold
+      }
+      
+      // If < 120s (2 mins), you get Silver AND Bronze
+      if (bestTime < 120) {
+        medals.add(const Icon(Icons.workspace_premium, color: AppTheme.medalSilver, size: 24)); // Silver
+      }
+      
+      // If < 300s (5 mins), you get Bronze
+      if (bestTime < 300) {
+        medals.add(const Icon(Icons.workspace_premium, color: AppTheme.medalBronze, size: 24)); // Bronze
+      }
+    }
+
     return ElevatedButton(
       onPressed: () {
         // Load the level and navigate
-        Provider.of<GameModel>(context, listen: false).loadLevel(index);
+        game.loadLevel(index);
         Navigator.push(
           context,
           MaterialPageRoute(builder: (context) => const GameScreen()),
         );
       },
       style: ElevatedButton.styleFrom(
-        backgroundColor: Colors.blue[50]!.withOpacity(0.5),
-        foregroundColor: Colors.black87,
+        backgroundColor: bgColor,
+        foregroundColor: AppTheme.textMain,
         elevation: 0,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: BorderSide(color: Colors.blue[200]!, width: 2),
+          side: BorderSide(color: borderColor, width: 2),
         ),
         padding: const EdgeInsets.symmetric(horizontal: 16),
       ),
-      child: Text(
-        "${index + 1}. $theme",
-        textAlign: TextAlign.center,
-        style: GoogleFonts.kanit(
-          fontSize: 18,
-          fontWeight: FontWeight.w600,
-        ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          // Level Text
+          Expanded(
+              child: Text(
+                "${index + 1}. $theme",
+                textAlign: TextAlign.center,
+                style: GoogleFonts.kanit(
+                  fontSize: 18,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+          ),
+          // Medal Icons
+          if (medals.isNotEmpty) ...[
+             const SizedBox(width: 8),
+             Row(
+               mainAxisSize: MainAxisSize.min,
+               children: medals,
+             ),
+          ]
+        ],
       ),
     );
   }

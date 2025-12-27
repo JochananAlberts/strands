@@ -8,6 +8,7 @@ import 'dart:math'; // For random
 import 'dart:async';
 import 'package:sensors_plus/sensors_plus.dart'; // Accelerometer
 import 'dart:math' as math; // For abs
+import 'app_theme.dart';
 
 class GameScreen extends StatefulWidget {
   const GameScreen({super.key});
@@ -164,11 +165,11 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppTheme.background,
       appBar: AppBar(
         // Menu Button (Upper Left)
         leading: IconButton(
-          icon: const Icon(Icons.menu, color: Colors.black),
+          icon: const Icon(Icons.menu, color: AppTheme.textMain),
           onPressed: () => _showGameMenu(context),
         ),
         title: Text(
@@ -177,10 +178,10 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
           style: GoogleFonts.kanit(
             fontSize: 28, // Increased size
             fontWeight: FontWeight.bold, 
-            color: Colors.black
+            color: AppTheme.textMain
           ),
         ),
-        backgroundColor: Colors.white,
+        backgroundColor: AppTheme.background,
         elevation: 0,
         centerTitle: true,
         actions: [
@@ -193,7 +194,7 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                  style: GoogleFonts.robotoMono(
                    fontSize: 18, 
                    fontWeight: FontWeight.bold, 
-                   color: Colors.black54
+                   color: AppTheme.disabled // was black54
                  ),
                ),
              ),
@@ -217,7 +218,7 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                   style: GoogleFonts.kanit(
                     fontSize: 32,
                     fontWeight: FontWeight.bold,
-                    color: Colors.blueAccent, 
+                    color: AppTheme.primary, 
                   ),
                 ),
               ),
@@ -299,7 +300,7 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
         child: Container(
           padding: const EdgeInsets.all(24),
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppTheme.background,
             borderRadius: BorderRadius.circular(20),
           ),
           child: Column(
@@ -313,7 +314,7 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 decoration: BoxDecoration(
-                  color: Colors.grey[100],
+                  color: AppTheme.disabledBg,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
@@ -321,7 +322,7 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                   style: GoogleFonts.robotoMono(
                     fontSize: 16, 
                     fontWeight: FontWeight.bold,
-                    color: Colors.green[700]
+                    color: AppTheme.success
                   ),
                 ),
               ),
@@ -336,7 +337,7 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
               _buildMenuOption(
                 icon: Icons.refresh,
                 label: "Reset Level",
-                color: Colors.blueAccent,
+                color: AppTheme.primary,
                 onTap: () {
                   Navigator.pop(ctx);
                   _confirmReset(context);
@@ -345,16 +346,14 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
               
               const SizedBox(height: 16),
 
-              // Home Option
+              // Back to Levels Option
               _buildMenuOption(
-                icon: Icons.home,
-                label: "Home Screen",
-                color: Colors.grey,
+                icon: Icons.grid_view,
+                label: "Back to Levels",
+                color: AppTheme.disabled,
                 onTap: () {
                   Navigator.pop(ctx); // Close dialog
-                  Navigator.of(context).pushReplacement(
-                     MaterialPageRoute(builder: (_) => const MainMenuScreen())
-                  );
+                  Navigator.pop(context); // Close GameScreen, returning to LevelSelect
                 },
               ),
             ],
@@ -383,18 +382,18 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
     List<BoxShadow> shadows = [];
 
     if (progress == 0) {
-      bulbColor = Colors.grey[400]!;
+      bulbColor = AppTheme.disabled; // was grey[400]
     } else if (isFull) {
-      bulbColor = Colors.yellowAccent[700]!; // Bright!
+      bulbColor = AppTheme.accentBright; // Bright!
       // Glow effect
       shadows = [
         BoxShadow(
-          color: Colors.yellowAccent.withOpacity(0.6),
+          color: AppTheme.accentBright.withOpacity(0.6),
           blurRadius: 20,
           spreadRadius: 5,
         ),
         BoxShadow(
-          color: Colors.orangeAccent.withOpacity(0.4),
+          color: AppTheme.accentOrange.withOpacity(0.4),
           blurRadius: 40,
           spreadRadius: 10,
         ),
@@ -476,7 +475,7 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
             const SizedBox(width: 16),
             Text(
               label,
-              style: GoogleFonts.kanit(fontSize: 18, color: Colors.black87),
+              style: GoogleFonts.kanit(fontSize: 18, color: AppTheme.textMain),
             ),
           ],
         ),
@@ -526,14 +525,14 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
 
     // Format Rank
     String rankText = "Completed";
-    Color rankColor = Colors.grey;
+    Color rankColor = AppTheme.disabled; // was grey
     if (game.currentRunRank != null) {
         if (game.currentRunRank == 1) {
             rankText = "🏆 New Record! (1st Place)";
-            rankColor = Colors.green[700]!;
+            rankColor = AppTheme.success;
         } else if (game.currentRunRank! <= 5) {
             rankText = "Top 5! (${game.currentRunRank}${_getOrdinal(game.currentRunRank!)} Place)";
-            rankColor = Colors.blue[700]!;
+            rankColor = AppTheme.primary; // was blue[700]
         } else {
             rankText = "Good Job!";
         }
@@ -543,27 +542,27 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
       width: double.infinity,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppTheme.background,
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
-           BoxShadow(color: Colors.black12, blurRadius: 16, offset: const Offset(0, 8))
+           const BoxShadow(color: Colors.black12, blurRadius: 16, offset: Offset(0, 8))
         ]
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-            Text("LEVEL SOLVED", style: GoogleFonts.kanit(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.blueAccent)),
+            Text("LEVEL SOLVED", style: GoogleFonts.kanit(fontSize: 24, fontWeight: FontWeight.bold, color: AppTheme.primary)),
             const SizedBox(height: 16),
             Text(
                 "\"$_cachedQuote\"",
                 textAlign: TextAlign.center,
-                style: GoogleFonts.kanit(fontSize: 18, fontStyle: FontStyle.italic, color: Colors.black87),
+                style: GoogleFonts.kanit(fontSize: 18, fontStyle: FontStyle.italic, color: AppTheme.textMain),
             ),
             const SizedBox(height: 24),
             Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                    const Icon(Icons.timer, color: Colors.grey),
+                    const Icon(Icons.timer, color: AppTheme.disabled), // was grey
                     const SizedBox(width: 8),
                     Text(timeText, style: GoogleFonts.robotoMono(fontSize: 24, fontWeight: FontWeight.bold)),
                 ],
@@ -582,11 +581,11 @@ class _GameScreenState extends State<GameScreen> with WidgetsBindingObserver {
                     width: 80,
                     height: 80,
                     decoration: BoxDecoration(
-                        color: Colors.blueAccent,
+                        color: AppTheme.primary,
                         shape: BoxShape.circle,
                         boxShadow: [
                             BoxShadow(
-                                color: Colors.blueAccent.withOpacity(0.4),
+                                color: AppTheme.primary.withOpacity(0.4),
                                 blurRadius: 10,
                                 offset: const Offset(0, 4),
                             )

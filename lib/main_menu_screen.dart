@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // For SystemNavigator
 import 'package:google_fonts/google_fonts.dart';
-import 'game_screen.dart'; // No longer direct, but maybe needed for other things? kept for safety, or remove if unused.
+import 'app_theme.dart';
+ 
 import 'level_select_screen.dart';
-import 'package:provider/provider.dart';
-import 'game_model.dart';
+// Provider and game_model are not used here currently
 
 class MainMenuScreen extends StatelessWidget {
   const MainMenuScreen({super.key});
@@ -12,7 +12,7 @@ class MainMenuScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppTheme.background,
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -23,7 +23,7 @@ class MainMenuScreen extends StatelessWidget {
               style: GoogleFonts.kanit(
                 fontSize: 48, // Large title
                 fontWeight: FontWeight.w900,
-                color: Colors.blueAccent,
+                color: AppTheme.primary,
               ),
             ),
             const SizedBox(height: 60),
@@ -32,7 +32,7 @@ class MainMenuScreen extends StatelessWidget {
             _buildMenuButton(
               context,
               label: "STRINGS",
-              color: Colors.blueAccent,
+              color: AppTheme.primary,
               onPressed: () {
                 Navigator.of(context).push(
                   MaterialPageRoute(builder: (_) => const LevelSelectScreen())
@@ -42,21 +42,14 @@ class MainMenuScreen extends StatelessWidget {
             const SizedBox(height: 20),
 
             // Maps Button
-            _buildMenuButton(
-              context,
-              label: "MAPS",
-              color: Colors.amber,
-              onPressed: () {
-                // Future implementation
-              },
-            ),
+
             const SizedBox(height: 20),
 
             // Exit Button
             _buildMenuButton(
               context,
               label: "EXIT",
-              color: Colors.grey,
+              color: AppTheme.disabled,
               onPressed: () {
                 SystemNavigator.pop(); // Closes the app
               },
@@ -78,7 +71,7 @@ class MainMenuScreen extends StatelessWidget {
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
           backgroundColor: color,
-          foregroundColor: Colors.white,
+          foregroundColor: AppTheme.background, // White text on buttons
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),

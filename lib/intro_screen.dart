@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'game_screen.dart';
 import 'dart:ui'; // For PathMetrics
 import 'main_menu_screen.dart';
+import 'app_theme.dart';
 
 class IntroScreen extends StatefulWidget {
   const IntroScreen({super.key});
@@ -78,7 +79,7 @@ class _IntroScreenState extends State<IntroScreen> with TickerProviderStateMixin
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: AppTheme.background,
       body: Center(
         child: SizedBox(
           width: spacing * 2,
@@ -141,11 +142,11 @@ class _IntroScreenState extends State<IntroScreen> with TickerProviderStateMixin
                 width: 70, // Slightly larger
                 height: 70,
                 decoration: BoxDecoration(
-                  color: Colors.blueAccent, // Icon style typically vibrant
+                  color: AppTheme.primary, // Icon style typically vibrant
                   borderRadius: BorderRadius.circular(20), // Rounded
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.2),
+                      color: AppTheme.textDark.withOpacity(0.2),
                       blurRadius: 8,
                       offset: const Offset(2, 4),
                     )
@@ -157,7 +158,7 @@ class _IntroScreenState extends State<IntroScreen> with TickerProviderStateMixin
                   style: GoogleFonts.kanit(
                     fontSize: 40, 
                     fontWeight: FontWeight.w900,
-                    color: Colors.white,
+                    color: AppTheme.background, // was white
                   ),
                 ),
               ),
@@ -178,7 +179,7 @@ class _IntroLinePainter extends CustomPainter {
     if (progress <= 0) return;
 
     final paint = Paint()
-      ..color = Colors.blueAccent // Or Lisa's game colors
+      ..color = AppTheme.primary // Or Lisa's game colors
       ..strokeWidth = 12
       ..strokeCap = StrokeCap.round
       ..style = PaintingStyle.stroke;

@@ -92,8 +92,42 @@ class GameModel extends ChangeNotifier {
   }
   
   // Leaderboard State
+  Map<int, int> levelHighScores = {}; // Cache of best times [levelIndex -> seconds]
   List<int> currentTopScores = [];
   int? currentRunRank; // 1-based rank of the current run, or null
+
+  Future<void> loadAllHighScores() async {
+    final prefs = await SharedPreferences.getInstance();
+    // Assuming we have e.g. 50 levels. We can iterate or just load on demand, 
+    // but for the menu, we want all of them. 
+    // Let's iterate through known level count (LevelData.levels.length)
+    // We need to import LevelData or pass count. 
+    // Since GameModel imports LevelData? No it doesn't seem to have LevelData reference in this snippet.
+    // The GameModel seems to receive levels via constructor or just manage state? 
+    // Checking file... It has LevelData import at top (viewed earlier).
+    
+    // We'll iterate a safe range or wait until we have levels.
+    // Actually, `getHighScore` just reads one. 
+    // We can iterate 0..49 (or whatever count).
+    // Let's assume we can access LevelData.levels.length
+    
+    // Actually simpler: we can just load them when `loadLevel` happens? 
+    // NO, LevelSelectScreen needs them ALL at once to show medals.
+    // So we need to iterate.
+    // I need to confirm if I can access LevelData here.
+    
+    // Changing approach slightly: Just iterate 0 to 99 in case. The shared_pref lookup is fast.
+    for (int i = 0; i < 100; i++) {
+        List<String>? scores = prefs.getStringList('leaderboard_level_$i');
+        if (scores != null && scores.isNotEmpty) {
+           int best = int.tryParse(scores.first) ?? 0;
+           if (best > 0) {
+             levelHighScores[i] = best;
+           }
+        }
+    }
+    notifyListeners();
+  }
 
   Future<List<int>> getTopScores(int levelIndex) async {
     final prefs = await SharedPreferences.getInstance();
@@ -103,9 +137,13 @@ class GameModel extends ChangeNotifier {
   }
   
   Future<int?> getHighScore(int levelIndex) async {
+    // Check cache first? 
+    // Actually, getHighScore is usually for the *current* level logic.
+    // But we can use the map if reliable. 
+    // For now, keep getHighScore reading from disk to be safe, or sync both.
     List<int> scores = await getTopScores(levelIndex);
     if (scores.isEmpty) return null;
-    return scores.first; // Best time is first because we sort ASC
+    return scores.first;
   }
   
   Future<void> _checkAndSaveHighScore() async {
@@ -152,6 +190,11 @@ class GameModel extends ChangeNotifier {
     // Legacy support: also update 'highScore' for the menu checks if we want to keep using that
     if (rank == 1) {
        await prefs.setInt('highScore_level_$currentLevelIndex', currentRunTime);
+    }
+    
+    // Update cache for LevelSelectScreen
+    if (scores.isNotEmpty) {
+      levelHighScores[currentLevelIndex] = scores.first; 
     }
     
     debugPrint("Leaderboard updated. Rank: $currentRunRank. Top: $scores");

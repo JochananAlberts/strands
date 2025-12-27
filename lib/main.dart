@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import 'intro_screen.dart';
 import 'game_model.dart';
 import 'services/dictionary_service.dart';
+import 'app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -17,13 +18,13 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) => GameModel(),
+      create: (_) => GameModel()..loadAllHighScores(),
       child: MaterialApp(
         title: "Lisa's Games",
         debugShowCheckedModeBanner: false,
         theme: ThemeData(
           useMaterial3: true,
-          colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
+          colorScheme: ColorScheme.fromSeed(seedColor: AppTheme.primary),
         ),
         home: const IntroScreen(),
       ),
